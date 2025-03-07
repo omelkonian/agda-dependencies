@@ -9,7 +9,7 @@ import Control.DeepSeq ( NFData(..) )
 import System.Console.GetOpt ( OptDescr(Option), ArgDescr(ReqArg) )
 
 import Data.Version ( showVersion )
-import Paths_agda2min ( version )
+import Paths_agda_deps ( version )
 
 import Agda.Syntax.Common.Pretty ( prettyShow )
 import Agda.Syntax.Internal ( qnameName, qnameModule )
@@ -44,7 +44,7 @@ type CompiledDef = String
 
 backend :: Backend' Options Options ModuleEnv ModuleRes CompiledDef
 backend = Backend'
-  { backendName           = "agda2??"
+  { backendName           = "agda-deps"
   , backendVersion        = Just (showVersion version)
   , options               = defaultOptions
   , commandLineFlags      =

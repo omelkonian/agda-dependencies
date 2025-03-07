@@ -1,22 +1,22 @@
 cabal-version:       2.2
-name:                agda2min
+name:                agda-deps
 version:             1.1
-author:              ???
+author:              Orestis Melkonian, Carlos Tomé Cortiñas
 category:            Language, Compiler
 build-type:          Simple
-synopsis:            Compiling Agda code to ??.
+synopsis:            Reporting lemma dependencies of Agda proofs.
 
 extra-doc-files:    README.md
 
 source-repository head
   type:     git
-  location: https://github.com/omelkonian/agda-minimal-backend.git
+  location: https://github.com/omelkonian/agda-dependencies.git
 
-executable agda2min
+executable agda-deps
   hs-source-dirs:      src
   main-is:             Main.hs
-  other-modules:       Paths_agda2min
-  autogen-modules:     Paths_agda2min
+  other-modules:       Paths_agda_deps
+  autogen-modules:     Paths_agda_deps
   build-depends:       base >= 4.10 && < 4.22,
                        Agda >= 2.7 && < 2.8,
                        deepseq >= 1.4.4 && < 1.6
