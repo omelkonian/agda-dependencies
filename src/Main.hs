@@ -2,7 +2,7 @@
 module Main where
 
 import Data.Maybe ( fromMaybe )
-import Control.Monad ( unless )
+import Control.Monad ( unless, forM_ )
 import Control.Monad.IO.Class ( MonadIO(liftIO) )
 import Control.DeepSeq ( NFData(..) )
 
@@ -13,6 +13,8 @@ import Paths_agda_deps ( version )
 
 import Agda.Syntax.Common.Pretty ( prettyShow )
 import Agda.Syntax.Internal ( qnameName, qnameModule )
+import Agda.Syntax.Internal.Names ( namesIn )
+import Agda.Syntax.Abstract.Name ( qnameToConcrete, QName )
 import Agda.Syntax.TopLevelModuleName ( TopLevelModuleName, moduleNameToFileName )
 
 import Agda.Compiler.Common ( curIF, compileDir )
@@ -22,6 +24,10 @@ import Agda.TypeChecking.Monad.Base ( Definition(..) )
 import Agda.TypeChecking.Monad
   ( TCM, withCurrentModule, iInsideScope, setScope
   , CompilerPragma(..), getUniqueCompilerPragma )
+
+import Agda.Utils.Graph.AdjacencyMap.Unidirectional
+  ( Graph, Edge )
+import qualified Agda.Utils.Graph.AdjacencyMap.Unidirectional as Graph
 
 import Agda.Main ( runAgda )
 
@@ -40,9 +46,9 @@ defaultOptions = Options{ optOutDir = Nothing }
 
 type ModuleEnv = ()
 type ModuleRes = ()
-type CompiledDef = String
+type CompiledDef = Definition
 
-backend :: Backend' Options Options ModuleEnv ModuleRes CompiledDef
+backend :: Backend' Options Options ModuleEnv ModuleRes ADDef
 backend = Backend'
   { backendName           = "agda-deps"
   , backendVersion        = Just (showVersion version)
@@ -55,8 +61,8 @@ backend = Backend'
   , preCompile            = return
   , postCompile           = \ _ _ _ -> return ()
   , preModule             = moduleSetup
-  , postModule            = writeModule
-  , compileDef            = compile
+  , postModule            = postModuleAD
+  , compileDef            = compileDefAD
   , scopeCheckingSuffices = False
   , mayEraseType          = \ _ -> return True
   }
@@ -67,20 +73,25 @@ moduleSetup _ _ m _ = do
   setScope . iInsideScope =<< curIF
   return $ Recompile ()
 
-compile :: Options -> ModuleEnv -> IsMain -> Definition -> TCM CompiledDef
-compile opts tlm _ Defn{..}
-  = withCurrentModule (qnameModule defName)
-  $ getUniqueCompilerPragma "AGDA2??" defName >>= \case
-      Nothing -> return []
-      Just (CompilerPragma _ _) ->
-        return $ prettyShow (qnameName defName) <> " = " <> prettyShow theDef
+data ADDef = ADDef {
+    _name :: QName   -- Name of the definition
+  , _deps :: [QName] -- its dependencies (named free variables)
+  }
 
-writeModule :: Options -> ModuleEnv -> IsMain -> TopLevelModuleName -> [CompiledDef]
-            -> TCM ModuleRes
-writeModule opts _ _ m cdefs = do
-  outDir <- compileDir
-  liftIO $ putStrLn (moduleNameToFileName m "txt")
-  let outFile = fromMaybe outDir (optOutDir opts) <> "/" <> moduleNameToFileName m "txt"
-  unless (all null cdefs) $ liftIO
-    $ writeFile outFile
-    $ "*** module " <> prettyShow m <> " ***\n" <> unlines cdefs
+computeADDef :: Definition -> ADDef
+computeADDef def@Defn{..} = ADDef { _name = defName, _deps = namesIn defType ++ namesIn theDef }
+
+computeDepGraph :: [ADDef] -> Graph QName ()
+computeDepGraph = Graph.fromEdges . concatMap defToEdges
+  where
+    defToEdges :: ADDef -> [Edge QName ()]
+    defToEdges ADDef{..} = map (\t -> Graph.Edge _name t ()) _deps
+
+compileDefAD :: Options -> ModuleEnv -> IsMain -> Definition -> TCM ADDef
+compileDefAD opts env _ def = return (computeADDef def)
+
+postModuleAD :: Options -> ModuleEnv -> IsMain -> TopLevelModuleName -> [ADDef] -> TCM ()
+postModuleAD opts env _ tlmn defs =
+  let depGraph = computeDepGraph defs
+  in liftIO $ forM_ (Graph.edges depGraph) $ do
+                \e -> print $ prettyShow e
