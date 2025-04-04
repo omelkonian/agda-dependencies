@@ -1,6 +1,11 @@
-# Minimal skeleton for developing a new Agda backend 
+# agda-deps: An Agda backend for visualizing lemma dependencies.
 
 - The backend is defined in `src/Main.hs`.
-- The `test/` directory contains an example compilation of `Test.agda` to `Test.txt`:
-    + `$ cabal run agda2min -- -i test/ -o test/ test/Test.agda`
+- Run the backend with:
+```
+$ cabal run agda-deps -- -i test/ -o test/ test/Test.agda
+```
 
+# Relevant links
+
+- https://unimath.github.io/agda-unimath/VISUALIZATION.html

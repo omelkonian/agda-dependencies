@@ -47,3 +47,14 @@ plus3 = map (λ n → n + 3)
 doubleLambda : Nat → Nat → Nat
 doubleLambda = λ a b → a + 2 * b
 {-# COMPILE AGDA2?? doubleLambda #-}
+
+-- ** Modules
+
+module M (n : Nat) where
+  increase : Nat → Nat
+  increase = _+ n
+
+open M 1 renaming (increase to increment)
+
+testModule : Nat
+testModule = increment 41
