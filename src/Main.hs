@@ -10,6 +10,8 @@ import Data.Map ( Map )
 import qualified Data.Map as M
 import Data.Set ( Set )
 import qualified Data.Set as S
+import Data.List.NonEmpty ( NonEmpty(..) )
+import Data.Foldable ( foldr1 )
 
 import System.Console.GetOpt ( OptDescr(Option), ArgDescr(ReqArg) )
 
@@ -19,6 +21,9 @@ import Paths_agda_deps ( version )
 import Agda.Utils.Lens ( (^.) )
 import Agda.Utils.Graph.AdjacencyMap.Unidirectional ( Graph, Edge )
 import qualified Agda.Utils.Graph.AdjacencyMap.Unidirectional as Graph
+
+import Agda.Syntax.Scope.Base ( Scope, allThingsInScope, NameSpace (nsInScope), _scopeInScope )
+import Agda.Syntax.Scope.Monad ( getCurrentScope )
 
 import Agda.Syntax.Internal ( qnameName, qnameModule )
 import Agda.Syntax.Internal.Names ( namesIn )
@@ -30,7 +35,7 @@ import Agda.Syntax.Common.Pretty ( prettyShow )
 import Agda.TypeChecking.Pretty ( text, prettyTCM )
 
 import Agda.TypeChecking.Monad
-  ( TCM, withCurrentModule, iInsideScope, setScope
+  ( TCM, withCurrentModule, iInsideScope, setScope, getScope
   , CompilerPragma(..), getUniqueCompilerPragma
   , Definition(..), Defn(..)
   , pattern Function, funWith, funExtLam, funInline, funProjection, funInline, funIsKanOp
@@ -89,17 +94,19 @@ moduleSetup _ _ m _ = do
 -- ** computing the dependencies
 
 data ADDef = ADDef
-  { _name :: QName   -- Name of the definition
-  , _deps :: [QName] -- its dependencies (named free variables)
+  { _name  :: QName     -- name of the definition
+  , _deps  :: Set QName -- its dependencies (named free variables)
+  , _scope :: Set QName -- things in scope (names) at the point of the definition
   } deriving (Show)
 
 computeADDef :: Definition -> TCM ADDef
 computeADDef def@Defn{..} = do
-  let deps = namesIn defType ++ namesIn theDef
-  deps' <- filterM (fmap not . ignoreDependency) deps
-  -- liftIO $ putStrLn $ "names in " <> prettyShow defName <> ": " <> prettyShow deps'
-  return $ ADDef { _name = defName, _deps = deps' }
+  deps <- S.fromList <$> filterM (fmap not . ignoreDependency) (namesIn defType ++ namesIn theDef)
+  scope <- _scopeInScope <$> getScope
+  -- liftIO $ putStrLn $ "names in " <> prettyShow defName <> ": " <> prettyShow deps <> ": " <> prettyShow scope
+  return $ ADDef { _name = defName, _deps = deps, _scope = scope}
 
+-- maybe change agda to allow more flexibility here?
 compileDefAD :: Options -> ModuleEnv -> IsMain -> Definition -> TCM (Maybe ADDef)
 compileDefAD opts env _ def = do
   -- liftIO $ putStrLn $ prettyShow def
@@ -109,23 +116,28 @@ compileDefAD opts env _ def = do
     Just <$> computeADDef def
 
 postModuleAD :: Options -> ModuleEnv -> IsMain -> TopLevelModuleName -> [Maybe ADDef] -> TCM [Maybe ADDef]
-postModuleAD opts env _ tlmn defs = return defs
+postModuleAD opts env _ tlmn defs = do
+  let (s:ss) = map (\d -> _scope d `S.difference` _deps d) . catMaybes $ defs
+      definedNames = S.fromList . map _name . catMaybes $ defs
+      unusedNames = intersections (s :| ss) `S.difference` definedNames
+  -- liftIO . putStrLn $ "All unused names in scope:"
+  -- liftIO . putStrLn $ prettyShow unusedNames
+  return defs
 
 -- ** constructing the graph
 
-postCompileAD :: Options -> IsMain -> (Map TopLevelModuleName [Maybe ADDef]) -> TCM ()
+postCompileAD :: Options -> IsMain -> Map TopLevelModuleName [Maybe ADDef] -> TCM ()
 postCompileAD opts _ defMap = do
-  let defs = catMaybes $ concat (M.elems defMap)
+  let defs = concatMap catMaybes (M.elems defMap)
   -- liftIO $ putStrLn $ "defs: " <> show defs
   let depGraph = computeDepGraph defs
-  liftIO $ forM_ (Graph.edges depGraph) $ do
-              \e -> print $ prettyShow e
+  liftIO $ forM_ (Graph.edges depGraph) $ print . prettyShow
   where
   computeDepGraph :: [ADDef] -> Graph QName ()
   computeDepGraph defs = Graph.fromEdges $ concatMap defToEdges defs
     where
     defToEdges :: ADDef -> [Edge QName ()]
-    defToEdges adef = flip mapMaybe (_deps adef) $ \t ->
+    defToEdges adef = flip mapMaybe (S.toList . _deps $ adef) $ \t ->
       if t `elem` map _name defs then
         Just (Graph.Edge (_name adef) t ())
       else
@@ -152,3 +164,6 @@ ignoreDef = \case
   _ -> False
 
 
+-- ** utils
+intersections :: Ord a => NonEmpty (Set a) -> Set a
+intersections = foldr1 S.intersection
