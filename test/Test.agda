@@ -1,7 +1,9 @@
 module _ where
 
-open import Agda.Builtin.Nat using (Nat; _+_; _*_)
-open import Agda.Builtin.List using (List; []; _∷_)
+-- open import Agda.Builtin.Nat using (Nat; _+_; _*_)
+-- open import Agda.Builtin.List using (List; []; _∷_)
+open import Nat using (Nat; _+_; _*_; zero)
+open import List using (List; []; _∷_)
 
 variable a b : Set
 
@@ -22,7 +24,7 @@ eval env (Var x) = env x
 -- ** Natural numbers
 
 sum : List Nat → Nat
-sum []       = 0
+sum []       = zero
 sum (x ∷ xs) = x + sum xs
 {-# COMPILE AGDA2?? sum #-}
 
@@ -38,6 +40,7 @@ map f [] = []
 map f (x ∷ xs) = f x ∷ map f xs
 {-# COMPILE AGDA2?? map #-}
 
+{-
 -- ** Lambdas
 
 plus3 : List Nat → List Nat
@@ -58,3 +61,7 @@ open M 1 renaming (increase to increment)
 
 testModule : Nat
 testModule = increment 41
+-- -}
+-- -}
+-- -}
+-- -}
