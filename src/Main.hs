@@ -39,7 +39,10 @@ import Agda.TypeChecking.Monad
   , CompilerPragma(..), getUniqueCompilerPragma
   , Definition(..), Defn(..)
   , pattern Function, funWith, funExtLam, funInline, funProjection, funInline, funIsKanOp
-  , pattern DataOrRecSig, pattern PrimitiveSort, pattern Primitive
+  , pattern Primitive, primClauses
+  , pattern PrimitiveSort
+  , pattern Axiom
+  , pattern DataOrRecSig
   , reportSLn, VerboseLevel
   )
 import Agda.TypeChecking.Monad.Debug ( reportSDoc )
@@ -99,10 +102,15 @@ data ADDef = ADDef
   , _scope :: Set QName -- things in scope (names) at the point of the definition
   } deriving (Show)
 
+sfilterM :: (Ord a, Monad m) => (a -> m Bool) -> Set a -> m (Set a)
+sfilterM f = fmap S.fromList . filterM f . S.toList
+-- TODO: improve this
+
 computeADDef :: Definition -> TCM ADDef
 computeADDef def@Defn{..} = do
   deps <- S.fromList <$> filterM (fmap not . ignoreDependency) (namesIn defType ++ namesIn theDef)
-  scope <- _scopeInScope <$> getScope
+  scope <- sfilterM (fmap not . ignoreDependency) =<< fmap _scopeInScope getScope
+  -- FIX: scope contains entries not in `using` clause!!!!
   -- liftIO $ putStrLn $ "names in " <> prettyShow defName <> ": " <> prettyShow deps <> ": " <> prettyShow scope
   return $ ADDef { _name = defName, _deps = deps, _scope = scope}
 
@@ -110,19 +118,23 @@ computeADDef def@Defn{..} = do
 compileDefAD :: Options -> ModuleEnv -> IsMain -> Definition -> TCM (Maybe ADDef)
 compileDefAD opts env _ def = do
   -- liftIO $ putStrLn $ prettyShow def
-  if ignoreDef (theDef def) then
+  if ignoreDef def then
     return Nothing
   else
     Just <$> computeADDef def
 
 postModuleAD :: Options -> ModuleEnv -> IsMain -> TopLevelModuleName -> [Maybe ADDef] -> TCM [Maybe ADDef]
 postModuleAD opts env _ tlmn defs = do
-  let (s:ss) = map (\d -> _scope d `S.difference` _deps d) . catMaybes $ defs
-      definedNames = S.fromList . map _name . catMaybes $ defs
-      unusedNames = intersections (s :| ss) `S.difference` definedNames
-  -- liftIO . putStrLn $ "All unused names in scope:"
-  -- liftIO . putStrLn $ prettyShow unusedNames
-  return defs
+  let ds = catMaybes defs
+  let sc = map (\d -> _scope d `S.difference` _deps d) ds
+  case sc of
+    [] -> return []
+    (s:ss) -> do
+      let definedNames = S.fromList $ map _name ds
+          unusedNames = intersections (s :| ss) `S.difference` definedNames
+      liftIO . putStrLn $ "[" <> prettyShow tlmn <> "]\nAll unused names in scope:"
+      liftIO . putStrLn $ prettyShow unusedNames
+      return defs
 
 -- ** constructing the graph
 
@@ -148,18 +160,27 @@ postCompileAD opts _ defMap = do
 ignoreDependency :: QName -> TCM Bool
 ignoreDependency qn = do
   def <- getConstInfo qn
-  return $ ignoreDef (theDef def)
+  return $ ignoreDef def
 
-ignoreDef :: Defn -> Bool
-ignoreDef = \case
+ignoreDef :: Definition -> Bool
+ignoreDef Defn{..} = case theDef of
+
   -- ** ignore functions that are pattern-lambdas/with-generated/Kan operations
   Function{..} | isJust funExtLam || isJust funWith || isJust funIsKanOp -> True
   -- ** ignore inlined functions (arising from instantiated modules)
   d@Function{..} | d ^. funInline -> True
-  -- Primitive{..} -> True
+
+  -- ** Primitives: ignore *primitive* functions (no clauses), not *builtin* functions.
+  Primitive{..} -> null primClauses
+
+  -- ** CHANGEME, ad-hoc treatment of Level
+  Axiom{} | prettyShow defName == "Agda.Primitive.Level" -> True
+
+  -- ** just ignore these kinds of definitions
   PrimitiveSort{..} -> True
   DataOrRecSig{..} -> True
   GeneralizableVar -> True
+
   -- ** consider everything else
   _ -> False
 
