@@ -31,7 +31,7 @@ import Agda.Syntax.Abstract.Name ( qnameToConcrete, QName )
 import Agda.Syntax.TopLevelModuleName ( TopLevelModuleName, moduleNameToFileName )
 import Agda.Syntax.Translation.InternalToAbstract ( reify )
 
-import Agda.Syntax.Common.Pretty ( prettyShow )
+import Agda.Syntax.Common.Pretty ( Pretty(..), prettyShow, (<+>), vsep, pshow )
 import Agda.TypeChecking.Pretty ( text, prettyTCM )
 
 import Agda.TypeChecking.Monad
@@ -44,11 +44,12 @@ import Agda.TypeChecking.Monad
   , pattern Axiom
   , pattern DataOrRecSig
   , reportSLn, VerboseLevel
+  , liftTCM
   )
 import Agda.TypeChecking.Monad.Debug ( reportSDoc )
 import Agda.TypeChecking.Monad.Signature ( getConstInfo )
 
-import Agda.Compiler.Common ( curIF, compileDir )
+import Agda.Compiler.Common ( curIF, compileDir, IsMain(..) )
 import Agda.Compiler.Backend ( Backend_boot(..), Backend(..), Backend'_boot(..), Backend'(..), Recompile(..), IsMain )
 
 import Agda.Main ( runAgda )
@@ -66,7 +67,7 @@ outdirOpt dir opts = return opts{ optOutDir = Just dir }
 defaultOptions :: Options
 defaultOptions = Options{ optOutDir = Nothing }
 
-type ModuleEnv = ()
+data ModuleEnv = ModuleEnv { namesInScope :: Set QName }
 type ModuleRes = [Maybe ADDef]
 
 backend :: Backend' Options Options ModuleEnv ModuleRes (Maybe ADDef)
@@ -91,42 +92,43 @@ backend = Backend'
 moduleSetup :: Options -> IsMain -> TopLevelModuleName -> Maybe FilePath
             -> TCM (Recompile ModuleEnv ModuleRes)
 moduleSetup _ _ m _ = do
-  setScope . iInsideScope =<< curIF
-  return $ Recompile ()
+  allNamesInScope <- nsInScope . allThingsInScope <$> liftTCM getCurrentScope
+  return $ Recompile (ModuleEnv allNamesInScope)
 
 -- ** computing the dependencies
 
 data ADDef = ADDef
   { _name  :: QName     -- name of the definition
   , _deps  :: Set QName -- its dependencies (named free variables)
-  , _scope :: Set QName -- things in scope (names) at the point of the definition
   } deriving (Show)
 
-sfilterM :: (Ord a, Monad m) => (a -> m Bool) -> Set a -> m (Set a)
-sfilterM f = fmap S.fromList . filterM f . S.toList
--- TODO: improve this
+instance Pretty ADDef where
+  pretty ADDef{..} = vsep [ pshow "Name:" <+> pretty _name
+                          , pshow "Deps:" <+> pretty _deps ]
 
 computeADDef :: Definition -> TCM ADDef
 computeADDef def@Defn{..} = do
   deps <- S.fromList <$> filterM (fmap not . ignoreDependency) (namesIn defType ++ namesIn theDef)
-  scope <- sfilterM (fmap not . ignoreDependency) =<< fmap _scopeInScope getScope
-  -- FIX: scope contains entries not in `using` clause!!!!
   -- liftIO $ putStrLn $ "names in " <> prettyShow defName <> ": " <> prettyShow deps <> ": " <> prettyShow scope
-  return $ ADDef { _name = defName, _deps = deps, _scope = scope}
+  return ADDef { _name = defName, _deps = deps }
 
 -- maybe change agda to allow more flexibility here?
 compileDefAD :: Options -> ModuleEnv -> IsMain -> Definition -> TCM (Maybe ADDef)
-compileDefAD opts env _ def = do
+compileDefAD opts _ IsMain def = do
   -- liftIO $ putStrLn $ prettyShow def
   if ignoreDef def then
     return Nothing
   else
-    Just <$> computeADDef def
+    do addef <- computeADDef def
+       liftIO $ putStrLn $ prettyShow addef
+       return $ Just addef
+compileDefAD opts env NotMain def = return Nothing
 
 postModuleAD :: Options -> ModuleEnv -> IsMain -> TopLevelModuleName -> [Maybe ADDef] -> TCM [Maybe ADDef]
 postModuleAD opts env _ tlmn defs = do
-  let ds = catMaybes defs
-  let sc = map (\d -> _scope d `S.difference` _deps d) ds
+  let allNs = namesInScope env
+      ds = catMaybes defs
+  let sc = map (\d -> allNs `S.difference` _deps d) ds
   case sc of
     [] -> return []
     (s:ss) -> do
