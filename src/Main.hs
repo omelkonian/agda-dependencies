@@ -1,4 +1,8 @@
-{-# LANGUAGE LambdaCase, RecordWildCards, PatternSynonyms, DoAndIfThenElse #-}
+{-# LANGUAGE DoAndIfThenElse #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
 import Control.Monad ( unless, forM_, filterM )
@@ -12,8 +16,9 @@ import Data.Set ( Set )
 import qualified Data.Set as S
 import Data.List.NonEmpty ( NonEmpty(..) )
 import Data.Foldable ( foldr1 )
+import Data.Text ( pack )
 
-import System.Console.GetOpt ( OptDescr(Option), ArgDescr(ReqArg) )
+import Agda.Utils.GetOpt ( OptDescr(Option), ArgDescr(ReqArg) )
 
 import Data.Version ( showVersion )
 import Paths_agda_deps ( version )
@@ -73,7 +78,7 @@ type ModuleRes = [Maybe ADDef]
 backend :: Backend' Options Options ModuleEnv ModuleRes (Maybe ADDef)
 backend = Backend'
   { backendName           = "agda-deps"
-  , backendVersion        = Just (showVersion version)
+  , backendVersion        = Just . pack . showVersion $ version
   , options               = defaultOptions
   , commandLineFlags      =
       [ Option ['o'] ["out-dir"] (ReqArg outdirOpt "DIR")
@@ -181,7 +186,7 @@ ignoreDef Defn{..} = case theDef of
   -- ** just ignore these kinds of definitions
   PrimitiveSort{..} -> True
   DataOrRecSig{..} -> True
-  GeneralizableVar -> True
+  GeneralizableVar _ -> True
 
   -- ** consider everything else
   _ -> False

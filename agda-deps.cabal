@@ -18,6 +18,7 @@ executable agda-deps
   other-modules:       Paths_agda_deps
   autogen-modules:     Paths_agda_deps
   build-depends:       base >= 4.10 && < 4.22,
-                       Agda >= 2.7 && < 2.8,
+                       Agda >= 2.8,
                        deepseq >= 1.4.4 && < 1.6,
+                       text,
                        containers
