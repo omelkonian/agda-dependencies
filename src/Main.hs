@@ -17,6 +17,7 @@ import qualified Data.Set as S
 import Data.List.NonEmpty ( NonEmpty(..) )
 import Data.Foldable ( foldr1 )
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.IO as TL
 
 import Agda.Utils.GetOpt ( OptDescr(Option), ArgDescr(ReqArg) )
@@ -37,7 +38,7 @@ import Agda.Syntax.Scope.Monad ( getCurrentScope )
 
 import Agda.Syntax.Internal ( qnameName, qnameModule )
 import Agda.Syntax.Internal.Names ( namesIn )
-import Agda.Syntax.Abstract.Name ( qnameToConcrete, QName )
+import Agda.Syntax.Abstract.Name ( ModuleName, Name , qnameToConcrete, QName )
 import Agda.Syntax.TopLevelModuleName ( TopLevelModuleName, moduleNameToFileName )
 import Agda.Syntax.Translation.InternalToAbstract ( reify )
 
@@ -161,7 +162,6 @@ postCompileAD opts _ defMap = do
   let defMap' :: Map TopLevelModuleName [ADDef]
       defMap' = fmap catMaybes defMap
 
-      defs :: [ADDef]
       defs = concat . M.elems $ defMap'
   liftIO $ TL.putStrLn . printDotGraph . computeDepGraph $ defs
   where
@@ -182,9 +182,14 @@ postCompileAD opts _ defMap = do
 
           ledgeList = concatMap mkEdges' defs
 
-          graphVizParams :: GraphvizParams Node QName () () QName
-          graphVizParams = nonClusteredParams
-            { fmtNode = \(n, l) -> [toLabel $ prettyShow l] }
+          graphVizParams :: GraphvizParams Node QName () ModuleName QName
+          graphVizParams = defaultParams
+            {
+              fmtNode = \(n, l) -> [toLabel $ prettyShow (qnameName l)],
+              clusterBy = \(n , l) -> C (qnameModule l) (N (n , l)),
+              clusterID = Str . TL.pack . prettyShow,
+              fmtCluster = \mn -> [ GraphAttrs [toLabel $ prettyShow mn]]
+            }
 
           depGraph :: Gr QName ()
           depGraph = mkGraph lnodeList ledgeList
