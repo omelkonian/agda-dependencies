@@ -44,6 +44,7 @@
                 [
                   cabal-install
                   haskell-language-server
+                  pkgs.xdot
                   pkgs.zlib
                 ]
               );

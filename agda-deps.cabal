@@ -21,4 +21,6 @@ executable agda-deps
                        Agda >= 2.8,
                        deepseq >= 1.4.4 && < 1.6,
                        text,
-                       containers
+                       containers,
+                       graphviz,
+                       fgl,

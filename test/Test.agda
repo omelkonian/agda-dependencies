@@ -21,6 +21,9 @@ eval env (Int n) = n
 eval env (Var x) = env x
 {-# COMPILE AGDA2?? eval #-}
 
+eval' : (a → Nat) → Exp a → Nat
+eval' env _ = zero
+
 -- ** Natural numbers
 
 sum : List Nat → Nat
