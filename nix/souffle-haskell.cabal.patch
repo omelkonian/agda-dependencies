@@ -1,0 +1,22 @@
+diff --git a/souffle-haskell.cabal b/souffle-haskell.cabal
+index bc46395..a9b9783 100644
+--- a/souffle-haskell.cabal
++++ b/souffle-haskell.cabal
+@@ -96,7 +96,7 @@ library
+       ScopedTypeVariables
+       StandaloneKindSignatures
+   ghc-options: -Wall -Weverything -Wno-safe -Wno-unsafe -Wno-implicit-prelude -Wno-missed-specializations -Wno-all-missed-specializations -Wno-missing-import-lists -Wno-type-defaults -Wno-missing-local-signatures -Wno-monomorphism-restriction -Wno-prepositive-qualified-module -Wno-missing-safe-haskell-mode -Wno-operator-whitespace -fhide-source-paths -fno-show-valid-hole-fits -fno-sort-valid-hole-fits
+-  cxx-options: -std=c++17 -Wall
++  cxx-options: -std=c++17 -Wno-deprecated-declarations
+   include-dirs:
+       cbits
+       cbits/souffle
+@@ -186,7 +186,7 @@ test-suite souffle-haskell-test
+       ScopedTypeVariables
+       StandaloneKindSignatures
+   ghc-options: -Wall -Weverything -Wno-safe -Wno-unsafe -Wno-implicit-prelude -Wno-missed-specializations -Wno-all-missed-specializations -Wno-missing-import-lists -Wno-type-defaults -Wno-missing-local-signatures -Wno-monomorphism-restriction -Wno-prepositive-qualified-module -Wno-missing-safe-haskell-mode -Wno-operator-whitespace -fhide-source-paths -fno-show-valid-hole-fits -fno-sort-valid-hole-fits -Wno-missing-kind-signatures -Wno-operator-whitespace
+-  cxx-options: -std=c++17 -D__EMBEDDED_SOUFFLE__
++  cxx-options: -Wno-deprecated-declarations -std=c++17 -D__EMBEDDED_SOUFFLE__
+   include-dirs:
+       cbits
+       cbits/souffle
