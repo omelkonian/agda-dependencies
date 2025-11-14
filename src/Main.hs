@@ -91,6 +91,8 @@ backend = Backend'
       [ Option ['o'] ["out-dir"] (ReqArg outdirOpt "DIR")
         "Write output files to DIR. (default: project root)"
       ]
+  , backendInteractTop    = Nothing
+  , backendInteractHole   = Nothing
   , isEnabled             = \ _ -> True
   , preCompile            = return
   , postCompile           = postCompileAD
